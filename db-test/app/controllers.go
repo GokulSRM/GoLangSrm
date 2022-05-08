@@ -14,10 +14,17 @@ import (
 )
 
 // struct for storing data
+type address struct {
+	Street string `json:"street"`
+	Area   string `json:"area"`
+}
+
+// struct for storing data
 type user struct {
-	Name string `json:name`
-	Age  int    `json:age`
-	City string `json:city`
+	Name    string  `json:"name"`
+	Age     int     `json:"age"`
+	Address address `json:"address"`
+	City    string  `json:"city"`
 }
 
 var userCollection = db().Database("Student").Collection("Profile") // get collection "users" from db() which returns *mongo.Client
@@ -48,18 +55,25 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 func GetUserProfile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
+	params := mux.Vars(r)["id"] //get Parameter value as string
 
-	var body user
-	e := json.NewDecoder(r.Body).Decode(&body)
-	if e != nil {
-
-		fmt.Print(e)
+	_id, err := primitive.ObjectIDFromHex(params) // convert params to mongodb Hex ID
+	if err != nil {
+		fmt.Printf(err.Error())
 	}
+
+	// var body user
+	// e := json.NewDecoder(r.Body).Decode(&body)
+	// if e != nil {
+
+	// 	fmt.Print(e)
+	// }
 	var result primitive.M //  an unordered representation of a BSON document which is a Map
-	err := userCollection.FindOne(context.TODO(), bson.D{{"name", body.Name}}).Decode(&result)
+	filter := bson.M{"_id": _id}
+	err1 := userCollection.FindOne(context.TODO(), filter).Decode(&result)
 	if err != nil {
 
-		fmt.Println(err)
+		fmt.Println(err1)
 
 	}
 	json.NewEncoder(w).Encode(result) // returns a Map containing document
@@ -72,10 +86,17 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 
+	type address struct {
+		Street string `json:"street"`
+		Area   string `json:"area"`
+	}
+
 	type updateBody struct {
-		Name string `json:"name"` //value that has to be matched
-		City string `json:"city"` // value that has to be modified
-		Age  string `json:"age"`  // value that has to be modified
+		Name    string  `json:"name"`    //value that has to be matched
+		City    string  `json:"city"`    // value that has to be modified
+		Age     string  `json:"age"`     // value that has to be modified
+		Address address `json:"address"` // value that has to be modified
+
 	}
 	var body updateBody
 	e := json.NewDecoder(r.Body).Decode(&body)
@@ -89,7 +110,7 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 		ReturnDocument: &after,
 	}
-	update := bson.D{{"$set", bson.D{{"city", body.City}, {"age", body.Age}}}}
+	update := bson.D{{"$set", bson.D{{"city", body.City}, {"age", body.Age}, {"address", bson.D{{"street", body.Address.Street}, {"area", body.Address.Area}}}}}}
 	updateResult := userCollection.FindOneAndUpdate(context.TODO(), filter, update, &returnOpt)
 
 	var result primitive.M

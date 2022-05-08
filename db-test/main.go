@@ -1,10 +1,11 @@
 package main
 
 import (
-	"github.com/gorilla/mux"
+	"db-test/app"
 	"log"
 	"net/http"
-	"db-test/app"
+
+	"github.com/gorilla/mux"
 )
 
 func main() {
@@ -16,7 +17,7 @@ func main() {
 
 	s.HandleFunc("/createProfile", app.CreateProfile).Methods("POST")
 	s.HandleFunc("/getAllUsers", app.GetAllUsers).Methods("GET")
-	s.HandleFunc("/getUserProfile", app.GetUserProfile).Methods("POST")
+	s.HandleFunc("/getUserProfile/{id}", app.GetUserProfile).Methods("GET")
 	s.HandleFunc("/updateProfile", app.UpdateProfile).Methods("PUT")
 	s.HandleFunc("/deleteProfile/{id}", app.DeleteProfile).Methods("DELETE")
 
