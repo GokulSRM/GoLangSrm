@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-playground/validator/v10"
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -15,16 +16,16 @@ import (
 
 // struct for storing data
 type address struct {
-	Street string `json:"street"`
-	Area   string `json:"area"`
+	Street string `json:"street"  validate:"required,min=15,max=30"`
+	Area   string `json:"area"  validate:"required,min=4,max=20"`
 }
 
 // struct for storing data
 type user struct {
-	Name    string  `json:"name"`
-	Age     int     `json:"age"`
+	Name    string  `json:"name" validate:"required,min=4,max=15"`
+	Age     int     `json:"age" validate:"gte=20,lte=65"`
 	Address address `json:"address"`
-	City    string  `json:"city"`
+	City    string  `json:"city" validate:"required,min=3,max=20"`
 }
 
 var userCollection = db().Database("Student").Collection("Profile") // get collection "users" from db() which returns *mongo.Client
@@ -36,17 +37,24 @@ func CreateProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json") // for adding Content-type
 
 	var person user
+	validate := validator.New()
 	err := json.NewDecoder(r.Body).Decode(&person) // storing in person variable of type user
 	if err != nil {
 		fmt.Print(err)
 	}
-	insertResult, err := userCollection.InsertOne(context.TODO(), person)
-	if err != nil {
-		log.Fatal(err)
+	errv := validate.Struct(person)
+	if errv != nil {
+		fmt.Println(errv)
+		json.NewEncoder(w).Encode(errv.Error())
+		w.WriteHeader(400)
+	} else {
+		insertResult, erri := userCollection.InsertOne(context.TODO(), person)
+		if erri != nil {
+			log.Fatal(erri)
+		}
+		fmt.Println("Inserted a single document: ", insertResult)
+		json.NewEncoder(w).Encode(insertResult.InsertedID) // return the mongodb ID of generated document
 	}
-
-	fmt.Println("Inserted a single document: ", insertResult)
-	json.NewEncoder(w).Encode(insertResult.InsertedID) // return the mongodb ID of generated document
 
 }
 
@@ -87,36 +95,44 @@ func UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 
 	type address struct {
-		Street string `json:"street"`
-		Area   string `json:"area"`
+		Street string `json:"street" validate:"required,min=15,max=30"`
+		Area   string `json:"area" validate:"required,min=4,max=20"`
 	}
 
 	type updateBody struct {
-		Name    string  `json:"name"`    //value that has to be matched
-		City    string  `json:"city"`    // value that has to be modified
-		Age     string  `json:"age"`     // value that has to be modified
-		Address address `json:"address"` // value that has to be modified
+		Name    string  `json:"name" validate:"required,min=4,max=15"` //value that has to be matched
+		City    string  `json:"city" validate:"required,min=3,max=20"` // value that has to be modified
+		Age     string  `json:"age" validate:"gte=20,lte=65"`          // value that has to be modified
+		Address address `json:"address"`                               // value that has to be modified
 
 	}
 	var body updateBody
-	e := json.NewDecoder(r.Body).Decode(&body)
-	if e != nil {
+	validate := validator.New()
+	errv := validate.Struct(body)
 
-		fmt.Print(e)
+	if errv != nil {
+		fmt.Println(errv)
+	} else {
+		e := json.NewDecoder(r.Body).Decode(&body)
+		if e != nil {
+
+			fmt.Print(e)
+		}
+		filter := bson.D{{"name", body.Name}} // converting value to BSON type
+		after := options.After                // for returning updated document
+		returnOpt := options.FindOneAndUpdateOptions{
+
+			ReturnDocument: &after,
+		}
+		update := bson.D{{"$set", bson.D{{"city", body.City}, {"age", body.Age}, {"address", bson.D{{"street", body.Address.Street}, {"area", body.Address.Area}}}}}}
+		updateResult := userCollection.FindOneAndUpdate(context.TODO(), filter, update, &returnOpt)
+
+		var result primitive.M
+		_ = updateResult.Decode(&result)
+
+		json.NewEncoder(w).Encode(result)
 	}
-	filter := bson.D{{"name", body.Name}} // converting value to BSON type
-	after := options.After                // for returning updated document
-	returnOpt := options.FindOneAndUpdateOptions{
 
-		ReturnDocument: &after,
-	}
-	update := bson.D{{"$set", bson.D{{"city", body.City}, {"age", body.Age}, {"address", bson.D{{"street", body.Address.Street}, {"area", body.Address.Area}}}}}}
-	updateResult := userCollection.FindOneAndUpdate(context.TODO(), filter, update, &returnOpt)
-
-	var result primitive.M
-	_ = updateResult.Decode(&result)
-
-	json.NewEncoder(w).Encode(result)
 }
 
 //Delete Profile of User
